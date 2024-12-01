@@ -16,6 +16,10 @@
 #include <sddl.h>
 #include <AclAPI.h>
 #include <shlobj.h>
+#include <tchar.h>
+
+#define INFO_BUFFER_SIZE 32767
+TCHAR  infoBuf[INFO_BUFFER_SIZE] = { '\0' };
 
 std::atomic<bool> keepRunning(true);  // Flag to control the loop
 
@@ -210,6 +214,8 @@ std::string getMonthAbbreviation(int month) {
     return months[month - 1];
 }
 
+
+
 //class Shell {
 //public:
 //    void run() {
@@ -273,7 +279,7 @@ public:
 private:
     std::deque<std::string> history;
 
-    void listDirectory(const std::string& dir, bool longFormat) {
+    void listDirectory(const std::string& dir, bool longFormat, bool includeHidden, bool recursive, bool sortByTime) {
         WIN32_FIND_DATA findFileData;
         HANDLE hFind = INVALID_HANDLE_VALUE;
 
@@ -357,6 +363,15 @@ private:
                 std::wcout << findFileData.cFileName                            // File Name
                     << "\033[0m" << std::endl;                                  // Reset color 
             }
+            else if (includeHidden) {
+
+            }
+            else if (recursive) {
+
+            }
+            else if (sortByTime) {
+
+            }
             else {
                 // Print file name with color
                 std::cout << colorCode;
@@ -378,7 +393,14 @@ private:
     }*/
 
     void printPrompt() {
-        const std::string user = "USER"; // Replace with dynamic user detection if needed
+        DWORD  bufCharCount = INFO_BUFFER_SIZE;
+
+        bufCharCount = INFO_BUFFER_SIZE;
+        if (!::GetUserName(infoBuf, &bufCharCount))
+            std::wcout << (TEXT("GetUserName"));
+        const std::wstring wUser = infoBuf;
+
+        const std::string user = wstrToStr(infoBuf); 
         const std::string host = "mini-shell";
 
         // Get the current directory
@@ -397,6 +419,63 @@ private:
         std::cout << green << user << "@" << host << reset << ":"
             << blue << "~/" << lastDir << reset << "$ ";
     }
+
+    void printHelp() {
+        std::cout << "Available commands:\n\n";
+
+        // List of commands and their descriptions
+        std::cout << "cd <path>\t\tChange the current directory to <path>\n";
+        std::cout << "ls [-l] [dir]\t\tList the contents of the directory [dir] (default: current directory), with an optional long format (-l)\n";
+        std::cout << "history\t\t\tDisplay the command history\n";
+        std::cout << "help\t\t\tShow this help message\n";
+        std::cout << "pwd\t\t\tPrint the current working directory\n";
+        std::cout << "clear\t\t\tClear the terminal screen\n";
+        std::cout << "touch <filename>\tCreate an empty file named <filename>\n";
+        std::cout << "cat <filename>\t\tDisplay the contents of <filename>\n";
+        std::cout << "rm <filename>\t\tRemove the specified file\n";
+        std::cout << "mkdir <dir>\t\tCreate a directory named <dir>\n";
+        std::cout << "rmdir <dir>\t\tRemove a directory named <dir>\n";
+        std::cout << "echo <text>\t\tDisplay the text <text>\n";
+        std::cout << "man <command>\t\tDisplay help for the specified command (e.g., 'man ls')\n";
+        std::cout << "cp <source> <dest>\tCopy a file from <source> to <dest>\n";
+        std::cout << "mv <source> <dest>\tMove or rename a file from <source> to <dest>\n";
+        std::cout << "head <filename>\t\tDisplay the first 10 lines of <filename>\n";
+        std::cout << "nano <filename>\t\tEdit <filename> in a simple text editor\n";
+
+        std::cout << "\nFor more detailed information on a specific command, use 'man <command>'.\n";
+    }
+
+    void man(const std::string& cmd) {
+        if (cmd == "ls") {
+            std::cout << "ls: List directory contents\n";
+            std::cout << "Usage: ls [-l] [dir]\n";
+            std::cout << "  -l\tDisplay detailed information (long format)\n";
+            std::cout << "  dir\tThe directory to list (default is current directory)\n";
+        }
+        else if (cmd == "cd") {
+            std::cout << "cd: Change the current directory\n";
+            std::cout << "Usage: cd <path>\n";
+            std::cout << "  path\tThe directory to change to (default is HOME if not specified)\n";
+        }
+        else if (cmd == "history") {
+            std::cout << "history: Show command history\n";
+            std::cout << "Usage: history\n";
+            std::cout << "  Displays a list of previously executed commands.\n";
+        }
+        else if (cmd == "cp") {
+            std::cout << "cp: Copy files and directories\n";
+            std::cout << "Usage: cp <source> <destination>\n";
+            std::cout << "  source\tThe file or directory to copy\n";
+            std::cout << "  destination\tThe target location for the copy\n";
+            std::cout << "Note:\n";
+            std::cout << "  - If the destination is a directory, the source is copied into it.\n";
+            std::cout << "  - Existing files at the destination will be overwritten.\n";
+        }
+        else {
+            std::cout << "man: No manual entry for " << cmd << "\n";
+        }
+    }
+
 
     std::string getInput() {
         std::string input;
@@ -443,6 +522,9 @@ private:
         if (command == "ls") {
             std::string arg;
             bool longFormat = false;
+            bool includeHidden = false;
+            bool recursive = false;
+            bool sortByTime = false;
             std::string dir = ".";  // Default to current directory
 
             // Parse arguments
@@ -450,18 +532,35 @@ private:
                 if (arg == "-l") {
                     longFormat = true;
                 }
+                else if (arg == "-a") {
+                    includeHidden = true;
+                    // Finish hidden files
+                }
+                else if (arg == "-R") {
+                    recursive = true;
+                    // Finish recursive files
+                }
+                else if (arg == "-t") {
+                    sortByTime = true;
+                    // likely wont finish this lmao
+                }
                 else {
                     dir = arg;  // Assume it's a directory
                 }
             }
 
             // Call function to list the directory
-            listDirectory(dir, longFormat);
+            listDirectory(dir, longFormat, includeHidden, recursive, sortByTime);
             return true;
         }
 
         if (command == "history") {
             printHistory();
+            return true;
+        }
+
+        if (command == "help") {
+            printHelp();
             return true;
         }
 
@@ -540,13 +639,7 @@ private:
         if (command == "man") {
             std::string cmd;
             iss >> cmd;
-            if (cmd == "ls") {
-                std::cout << "ls: List directory contents\n";
-            }
-            else if (cmd == "cd") {
-                std::cout << "cd: Change the current directory\n";
-            }
-            // Add more as needed...
+            man(cmd);    // Call the `man` function with the command
             return true;
         }
 
